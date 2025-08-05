@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premier Joueur</title>
+  <link rel="icon" type="image/png" href="premier_joueur-icon.png">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #111;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let touches = {};
+    let usedColors = new Set();
+    let animationProgress = 0;
+    let selecting = false;
+    let chosenId = null;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function randomColor() {
+      let color;
+      let attempts = 0;
+      do {
+        color = `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`;
+        attempts++;
+      } while (usedColors.has(color) && attempts < 100);
+      usedColors.add(color);
+      return color;
+    }
+
+    function releaseColor(color) {
+      usedColors.delete(color);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let id in touches) {
+        if (chosenId && id !== chosenId) continue;
+
+        const touch = touches[id];
+        if (!touch.color) continue;
+        const { x, y, color } = touch;
+
+        // Cercle plein
+        ctx.beginPath();
+        ctx.arc(x, y, 60, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 1;
+        ctx.fill();
+
+        // Animation d’anneau
+        if (selecting) {
+          ctx.beginPath();
+          ctx.arc(x, y, 70, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * animationProgress);
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        }
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function update() {
+      if (selecting) {
+        animationProgress += 0.01;
+        if (animationProgress >= 1) {
+          selecting = false;
+          animationProgress = 1;
+
+          const ids = Object.keys(touches);
+          if (ids.length > 1) {
+            chosenId = ids[Math.floor(Math.random() * ids.length)];
+          }
+        }
+      }
+
+      draw();
+      requestAnimationFrame(update);
+    }
+
+    function reset() {
+      touches = {};
+      usedColors.clear();
+      animationProgress = 0;
+      selecting = false;
+      chosenId = null;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    update();
+
+    canvas.addEventListener('touchstart', (e) => {
+      for (let t of e.changedTouches) {
+        if (!touches[t.identifier]) {
+          touches[t.identifier] = {
+            x: t.clientX,
+            y: t.clientY,
+            color: randomColor(),
+          };
+        }
+      }
+
+      if (Object.keys(touches).length >= 2 && !selecting && !chosenId) {
+        animationProgress = 0;
+        selecting = true;
+        chosenId = null;
+      }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      for (let t of e.changedTouches) {
+        if (touches[t.identifier]) {
+          touches[t.identifier].x = t.clientX;
+          touches[t.identifier].y = t.clientY;
+        }
+      }
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+      for (let t of e.changedTouches) {
+        if (touches[t.identifier]) {
+          releaseColor(touches[t.identifier].color);
+          delete touches[t.identifier];
+        }
+      }
+
+      // Si un joueur a été choisi et qu’il ne reste aucun doigt → réinitialiser
+      if (chosenId && Object.keys(touches).length === 0) {
+        reset();
+        return;
+      }
+
+      // Sinon, ne réinitialiser que si aucun joueur n’a été choisi
+      if (!chosenId) {
+        animationProgress = 0;
+        selecting = false;
+        chosenId = null;
+      }
+    });
+  </script>
+</body>
+</html>
